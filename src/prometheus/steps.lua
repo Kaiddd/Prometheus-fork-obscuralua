@@ -1,12 +1,30 @@
-return {
-	WrapInFunction       = require("prometheus.steps.WrapInFunction");
-	SplitStrings         = require("prometheus.steps.SplitStrings");
-	Vmify                = require("prometheus.steps.Vmify");
-	ConstantArray        = require("prometheus.steps.ConstantArray");
-	ProxifyLocals  			 = require("prometheus.steps.ProxifyLocals");
-	AntiTamper  				 = require("prometheus.steps.AntiTamper");
-	EncryptStrings 			 = require("prometheus.steps.EncryptStrings");
-	NumbersToExpressions = require("prometheus.steps.NumbersToExpressions");
-	AddVararg 					 = require("prometheus.steps.AddVararg");
-	WatermarkCheck		   = require("prometheus.steps.WatermarkCheck");
+local steps = {
+    "WrapInFunction",
+    "SplitStrings",
+    "Vmify",
+    "ConstantArray",
+    "ProxifyLocals",
+    -- Begin AntiTamper --
+    "PaidAntiTamper",
+    "FreeAntiTamper",
+    -- End AntiTamper --
+    "EncryptStrings",
+    "NumbersToExpressions",
+    "StringsToExpressions",
+    "AddVararg",
+    "WatermarkCheck",
 }
+
+local result = {}
+
+for _, step in pairs(steps) do
+    local path
+    if step == "PaidAntiTamper" or step == "FreeAntiTamper" then
+        path = "Prometheus.steps.AntiTamper." .. step
+    else
+        path = "Prometheus.steps." .. step
+    end
+    result[step] = require(path)
+end
+
+return result

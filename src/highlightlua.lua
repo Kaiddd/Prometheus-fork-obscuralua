@@ -1,61 +1,80 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
---
--- This Script provides a simple Method for Syntax Highlighting of Lua code
+local colors = require("colors")
 
-local Tokenizer = require("prometheus.tokenizer");
-local colors    = require("colors");
-local TokenKind = Tokenizer.TokenKind;
-local lookupify = require("prometheus.util").lookupify;
+local function highlight(code)
+    local out = ""
+    local position = 1
 
-return function(code, luaVersion)
-    local out = "";
-    local tokenizer = Tokenizer:new({
-        LuaVersion = luaVersion,
-    });
-
-    tokenizer:append(code);
-    local tokens = tokenizer:scanAll();
-
-    local nonColorSymbols = lookupify{
-        ",", ";", "(", ")", "{", "}", ".", ":", "[", "]"
-    }
-
-    local defaultGlobals = lookupify{
-        "string", "table", "bit32", "bit"
-    }
-
-    local currentPos = 1;
-    for _, token in ipairs(tokens) do
-        if token.startPos >= currentPos then
-            out = out .. string.sub(code, currentPos, token.startPos);
+    local function read()
+        if position > #code then
+            return nil
         end
-        if token.kind == TokenKind.Ident then
-            if defaultGlobals[token.source] then
-                out = out .. colors(token.source, "red");
-            else
-                out = out .. token.source;
-            end
-        elseif token.kind == TokenKind.Keyword then
-            if token.source == "nil" then
-                out = out .. colors(token.source, "yellow");
-            else
-                out = out .. colors(token.source, "yellow");
-            end
-        elseif token.kind == TokenKind.Symbol then
-            if nonColorSymbols[token.source] then
-                out = out .. token.source;
-            else
-                out = out .. colors(token.source, "yellow");
-            end
-        elseif token.kind == TokenKind.String then
-            out = out .. colors(token.source, "green")
-        elseif token.kind == TokenKind.Number then
-            out = out .. colors(token.source, "red")
-        else
-            out = out .. token.source;
-        end
-
-        currentPos = token.endPos + 1;
+        local c = code:sub(position, position)
+        position = position + 1
+        return c
     end
-    return out;
+
+    local function highlightToken(token, color)
+        return colors(token, color)
+    end
+
+    local function isKeyword(token)
+        local keywords = { "and", "break", "do", "else", "elseif", "end", "false", "for", "function", "if", "in", "local",
+            "nil", "not", "or", "repeat", "return", "then", "true", "until", "while" }
+        for _, keyword in ipairs(keywords) do
+            if token == keyword then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function isGlobal(token)
+        local globals = { "string", "table", "bit32", "bit" }
+        for _, global in ipairs(globals) do
+            if token == global then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function isSymbol(token)
+        local symbols = { ",", ";", "(", ")", "{", "}", ".", ":", "[", "]" }
+        for _, symbol in ipairs(symbols) do
+            if token == symbol then
+                return true
+            end
+        end
+        return false
+    end
+
+    while true do
+        local token, kind = load(read)
+        if not token then
+            break
+        end
+        if kind == "keyword" or isKeyword(token) then
+            out = out .. highlightToken(token, "yellow")
+        elseif kind == "name" then
+            if isGlobal(token) then
+                out = out .. highlightToken(token, "red")
+            else
+                out = out .. token
+            end
+        elseif kind == "string" or kind == "number" then
+            out = out .. highlightToken(token, kind == "string" and "green" or "red")
+        elseif kind == "symbol" then
+            if isSymbol(token) then
+                out = out .. token
+            else
+                out = out .. highlightToken(token, "yellow")
+            end
+        else
+            out = out .. token
+        end
+    end
+
+    return out
 end
+
+return highlight

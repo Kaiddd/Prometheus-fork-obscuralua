@@ -1,7 +1,7 @@
 return {
-	Mangled = require("prometheus.namegenerators.mangled");
-	MangledShuffled = require("prometheus.namegenerators.mangled_shuffled");
-	Il = require("prometheus.namegenerators.Il");
-	Number = require("prometheus.namegenerators.number");
-	Confuse = require("prometheus.namegenerators.confuse");
+	Mangled  		  		 = require("Prometheus.namegenerators.mangled");
+	MangledShuffled  		 = require("Prometheus.namegenerators.mangled_shuffled");
+	Il 		  		  		 = require("Prometheus.namegenerators.Il");
+	Number 		  		  	 = require("Prometheus.namegenerators.number");
+	Confuse  		  		 = require("Prometheus.namegenerators.confuse");
 }

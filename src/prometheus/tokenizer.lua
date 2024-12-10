@@ -1,11 +1,11 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
+-- This Script is Part of the Prometheus Obfuscator by levno-710
 --
 -- tokenizer.lua
 -- Overview:
 -- This Script provides a class for lexical Analysis of lua code.
 -- This Tokenizer is Capable of tokenizing LuaU and Lua5.1
-local Enums = require("prometheus.enums");
-local util = require("prometheus.util");
+local Enums = require("Prometheus.enums");
+local util = require("Prometheus.util");
 local logger = require("logger");
 local config = require("config");
 
@@ -17,48 +17,67 @@ local chararray = util.chararray;
 local keys = util.keys;
 local Tokenizer = {};
 
-Tokenizer.EOF_CHAR = "<EOF>";
-Tokenizer.WHITESPACE_CHARS = lookupify{
-	" ", "\t", "\n", "\r",
+-- Define constants
+local EOF_CHAR = "<EOF>"
+local WHITESPACE_CHARS = lookupify{
+    " ", "\t", "\n", "\r",
+}
+local ANNOTATION_CHARS = lookupify(chararray("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"))
+local ANNOTATION_START_CHARS = lookupify(chararray("!@"))
+local Conventions = Enums.Conventions
+local TokenKind = {
+    Eof     = "Eof",
+    Keyword = "Keyword",
+    Symbol  = "Symbol",
+    Ident   = "Identifier",
+    Number  = "Number",
+    String  = "String",
+}
+local EOF_TOKEN = {
+    kind = TokenKind.Eof,
+    value = EOF_CHAR,
+    startPos = -1,
+    endPos = -1,
+    source = EOF_CHAR,
 }
 
-Tokenizer.ANNOTATION_CHARS = lookupify(chararray("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"))
-Tokenizer.ANNOTATION_START_CHARS = lookupify(chararray("!@"))
-
-Tokenizer.Conventions = Enums.Conventions;
-
-Tokenizer.TokenKind = {
-	Eof     = "Eof",
-	Keyword = "Keyword",
-	Symbol  = "Symbol",
-	Ident   = "Identifier",
-	Number  = "Number",
-	String  = "String",
-}
-
-Tokenizer.EOF_TOKEN = {
-	kind = Tokenizer.TokenKind.Eof,
-	value = "<EOF>",
-	startPos = -1,
-	endPos = -1,
-	source = "<EOF>",
-}
-
+-- Move token function to a separate module
+-- Modify the token function to handle Eof kind
 local function token(self, startPos, kind, value)
-	local line, linePos = self:getPosition(self.index);
-	local annotations = self.annotations
-	self.annotations = {};
-	return {
-		kind     = kind,
-		value    = value,
-		startPos = startPos,
-		endPos   = self.index,
-		source   = self.source:sub(startPos + 1, self.index),
-		line     = line,
-		linePos  = linePos,
-		annotations = annotations,
-	}
+    -- If kind is Eof and value is nil, set value to EOF_CHAR
+    if kind == TokenKind.Eof and not value then
+        value = EOF_CHAR
+    end
+
+    -- Add detailed logging
+    if not kind or not value then
+        logger:error("Invalid Token Kind or Value. Kind: " .. tostring(kind) .. ", Value: " .. tostring(value))
+        return nil
+    end
+
+    local line, linePos = self:getPosition(self.index)
+    local annotations = self.annotations
+    self.annotations = {}
+    return {
+        kind     = kind,
+        value    = value,
+        startPos = startPos,
+        endPos   = self.index,
+        source   = self.source:sub(startPos + 1, self.index),
+        line     = line,
+        linePos  = linePos,
+        annotations = annotations,
+    }
 end
+
+-- Use constants instead of string literals
+Tokenizer.EOF_CHAR = EOF_CHAR
+Tokenizer.WHITESPACE_CHARS = WHITESPACE_CHARS
+Tokenizer.ANNOTATION_CHARS = ANNOTATION_CHARS
+Tokenizer.ANNOTATION_START_CHARS = ANNOTATION_START_CHARS
+Tokenizer.Conventions = Conventions
+Tokenizer.TokenKind = TokenKind
+Tokenizer.EOF_TOKEN = EOF_TOKEN
 
 local function generateError(self, message)
 	local line, linePos = self:getPosition(self.index);
@@ -104,9 +123,10 @@ end
 function Tokenizer:new(settings) 
 	local luaVersion = (settings and (settings.luaVersion or settings.LuaVersion)) or LuaVersion.LuaU;
 	local conventions = Tokenizer.Conventions[luaVersion];
-	
-	if(conventions == nil) then
+
+	if not conventions then
 		logger:error("The Lua Version \"" .. luaVersion .. "\" is not recognised by the Tokenizer! Please use one of the following: \"" .. table.concat(keys(Tokenizer.Conventions), "\",\"") .. "\"");
+		return nil
 	end
 	
 	local tokenizer = {
@@ -400,8 +420,18 @@ function Tokenizer:singleLineString()
 					numstr = numstr .. char;
 				end
 				
-				char = string.char(tonumber(numstr));
-				
+				local num = tonumber(numstr);
+				if num then
+					if(num > 255) then
+						logger:error(generateError(self, "Invalid Escape Sequence"));
+					end
+					char = string.char(num);
+				else
+					-- Handle the case where numstr could not be converted to a number
+					logger:error(generateError(self, "Invalid Escape Sequence"));
+					
+				end
+
 			elseif(self.UnicodeEscapes and char == "u") then
 				expect(self, "{");
 				local num = "";
@@ -535,12 +565,14 @@ function Tokenizer:next()
 end
 
 function Tokenizer:scanAll()
-	local tb = {};
-	repeat
-		local token = self:next();
-		table.insert(tb, token);
-	until token.kind == Tokenizer.TokenKind.Eof
-	return tb
+    local tb = {};
+    repeat
+        local token = self:next();
+        if token ~= nil then
+            table.insert(tb, token);
+        end
+    until token == nil or token.kind == Tokenizer.TokenKind.Eof
+    return tb
 end
 
 return Tokenizer

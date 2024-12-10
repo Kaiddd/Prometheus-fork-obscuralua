@@ -1,10 +1,10 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
+-- This Script is Part of the Prometheus Obfuscator by levno-710
 --
 -- namegenerators/confuse.lua
 --
 -- This Script provides a function for generation of confusing variable names
 
-local util = require("prometheus.util");
+local util = require("Prometheus.util");
 local chararray = util.chararray;
 
 local varNames = {
@@ -149,14 +149,18 @@ local varNames = {
 local function generateName(id, scope)
     local name = {};
     local d = id % #varNames
-	id = (id - d) / #varNames
-	table.insert(name, varNames[d + 1]);
-	while id > 0 do
-		local d = id % #varNames
-		id = (id - d) / #varNames
-		table.insert(name, varNames[d + 1]);
-	end
-	return table.concat(name, "_");
+    id = (id - d) / #varNames
+    table.insert(name, varNames[d + 1]);
+    while id > 0 do
+        local d = id % #varNames
+        id = (id - d) / #varNames
+        table.insert(name, varNames[d + 1]);
+    end
+    local result = ""
+    for i, v in ipairs(name) do
+        result = result .. (i > 1 and "_" or "") .. v
+    end
+    return result
 end
 
 local function prepare(ast)
@@ -164,6 +168,6 @@ local function prepare(ast)
 end
 
 return {
-	generateName = generateName, 
-	prepare = prepare
+    generateName = generateName,
+    prepare = prepare
 };

@@ -1,4 +1,4 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
+-- This Script is Part of the Prometheus Obfuscator by levno-710
 --
 -- logger.lua
 
@@ -26,7 +26,7 @@ function logger:debug(...)
 end
 
 logger.logCallback = function(...)
-	print(colors(config.NameUpper .. ": ", "magenta") .. ...);
+	print(colors(config.NameUpper .. ": ", "hotpink") .. ...);
 end;
 function logger:log(...)
 	if self.logLevel >= self.LogLevel.Log then

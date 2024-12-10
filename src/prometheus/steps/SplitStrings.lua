@@ -1,15 +1,14 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
+-- This Script is Part of the Prometheus Obfuscator by levno-710
 --
 -- SplitStrings.lua
 --
 -- This Script provides a Simple Obfuscation Step for splitting Strings
-
-local Step = require("prometheus.step");
-local Ast = require("prometheus.ast");
-local visitAst = require("prometheus.visitast");
-local Parser = require("prometheus.parser");
-local util = require("prometheus.util");
-local enums = require("prometheus.enums")
+local Step = require("Prometheus.step");
+local Ast = require("Prometheus.ast");
+local visitAst = require("Prometheus.visitast");
+local Parser = require("Prometheus.parser");
+local util = require("Prometheus.util");
+local enums = require("Prometheus.enums")
 
 local LuaVersion = enums.LuaVersion;
 
@@ -44,7 +43,8 @@ SplitStrings.SettingsDescriptor = {
 	},
 	ConcatenationType = {
 		name = "ConcatenationType",
-		description = "The Functions used for Concatenation. Note that when using custom, the String Array will also be Shuffled",
+		description =
+		"The Functions used for Concatenation. Note that when using custom, the String Array will also be Shuffled",
 		type = "enum",
 		values = {
 			"strcat",
@@ -55,7 +55,8 @@ SplitStrings.SettingsDescriptor = {
 	},
 	CustomFunctionType = {
 		name = "CustomFunctionType",
-		description = "The Type of Function code injection This Option only applies when custom Concatenation is selected.\
+		description =
+		"The Type of Function code injection This Option only applies when custom Concatenation is selected.\
 Note that when chosing inline, the code size may increase significantly!",
 		type = "enum",
 		values = {
@@ -71,268 +72,265 @@ Note that when chosing inline, the code size may increase significantly!",
 		type = "number",
 		default = 2,
 		min = 1,
-	}
+	},
+	NestedLayers = {
+		name = "NestedLayers",
+		description = "The number of times the string is split into chunks",
+		type = "number",
+		default = 1,
+		min = 1,
+		max = nil,
+	},
 }
 
 function SplitStrings:init(settings) end
 
 local function generateTableConcatNode(chunks, data)
-	local chunkNodes = {};
-	for i, chunk in ipairs(chunks) do
-		table.insert(chunkNodes, Ast.TableEntry(Ast.StringExpression(chunk)));
-	end
-	local tb = Ast.TableConstructorExpression(chunkNodes);
-	data.scope:addReferenceToHigherScope(data.tableConcatScope, data.tableConcatId);
-	return Ast.FunctionCallExpression(Ast.VariableExpression(data.tableConcatScope, data.tableConcatId), {tb});	
+    local chunkNodes = {}
+    for i = 1, #chunks do
+        chunkNodes[i] = Ast.TableEntry(Ast.StringExpression(chunks[i]))
+    end
+    local tb = Ast.TableConstructorExpression(chunkNodes)
+    data.scope:addReferenceToHigherScope(data.tableConcatScope, data.tableConcatId)
+    return Ast.FunctionCallExpression(Ast.VariableExpression(data.tableConcatScope, data.tableConcatId), {tb})
 end
 
 local function generateStrCatNode(chunks)
-	-- Put Together Expression for Concatenating String
-	local generatedNode = nil;
-	for i, chunk in ipairs(chunks) do
-		if generatedNode then
-			generatedNode = Ast.StrCatExpression(generatedNode, Ast.StringExpression(chunk));
-		else
-			generatedNode = Ast.StringExpression(chunk);
-		end
-	end
-	return generatedNode
+    if #chunks == 0 then return nil end
+    -- Use table.concat for efficient string concatenation
+    local strTable = {}
+    for i = 1, #chunks do
+        strTable[i] = chunks[i]
+    end
+    return Ast.StringExpression(table.concat(strTable))
 end
 
 local customVariants = 2;
 local custom1Code = [=[
 function custom(table)
-    local stringTable, str = table[#table], "";
+    local stringTable, strTable = table[#table], {};
     for i=1,#stringTable, 1 do
-        str = str .. stringTable[table[i]];
-	end
-	return str
+        strTable[#strTable + 1] = stringTable[table[i]];
+    end
+    return table.concat(strTable)
 end
 ]=];
 
 local custom2Code = [=[
 function custom(tb)
-	local str = "";
-	for i=1, #tb / 2, 1 do
-		str = str .. tb[#tb / 2 + tb[i]];
-	end
-	return str
+    local strTable = {};
+    for i=1, #tb / 2, 1 do
+        strTable[#strTable + 1] = tb[#tb / 2 + tb[i]];
+    end
+    return table.concat(strTable)
 end
 ]=];
 
 local function generateCustomNodeArgs(chunks, data, variant)
-	local shuffled = {};
-	local shuffledIndices = {};
-	for i = 1, #chunks, 1 do
-		shuffledIndices[i] = i;
-	end
-	util.shuffle(shuffledIndices);
-	
-	for i, v in ipairs(shuffledIndices) do
-		shuffled[v] = chunks[i];
-	end
-	
-	-- Custom Function Type 1
-	if variant == 1 then
-		local args = {};
-		local tbNodes = {};
-		
-		for i, v in ipairs(shuffledIndices) do
-			table.insert(args, Ast.TableEntry(Ast.NumberExpression(v)));
-		end
-		
-		for i, chunk in ipairs(shuffled) do
-			table.insert(tbNodes, Ast.TableEntry(Ast.StringExpression(chunk)));
-		end
-		
-		local tb = Ast.TableConstructorExpression(tbNodes);
-		
-		table.insert(args, Ast.TableEntry(tb));
-		return {Ast.TableConstructorExpression(args)};
-		
-	-- Custom Function Type 2
-	else
-		
-		local args = {};
-		for i, v in ipairs(shuffledIndices) do
-			table.insert(args, Ast.TableEntry(Ast.NumberExpression(v)));
-		end
-		for i, chunk in ipairs(shuffled) do
-			table.insert(args, Ast.TableEntry(Ast.StringExpression(chunk)));
-		end
-		return {Ast.TableConstructorExpression(args)};
-	end
-	
+    local shuffledIndices = {}
+    for i = 1, #chunks do
+        shuffledIndices[i] = i
+    end
+    util.shuffle(shuffledIndices)
+
+    local args = {}
+    for i, index in ipairs(shuffledIndices) do
+        args[i] = Ast.TableEntry(Ast.NumberExpression(index))
+    end
+    if variant == 1 then
+        local tbNodes = {}
+        for i, chunk in ipairs(chunks) do
+            tbNodes[i] = Ast.TableEntry(Ast.StringExpression(chunk))
+        end
+        local tb = Ast.TableConstructorExpression(tbNodes)
+        table.insert(args, Ast.TableEntry(tb))
+    else
+        for i, chunk in ipairs(chunks) do
+            table.insert(args, Ast.TableEntry(Ast.StringExpression(chunk)))
+        end
+    end
+    return {Ast.TableConstructorExpression(args)}
 end
 
+local parsedCustomFunctions = {}
+
+local parser = Parser:new({
+	LuaVersion = LuaVersion.LuaU,
+});
+
+-- Helper function to parse code and create function declaration
+local function parseAndCreateFuncDecl(parser, code, scope)
+    local funcDeclNode = parser:parse(code).body.statements[1];
+    local funcBody = funcDeclNode.body;
+    local funcArgs = funcDeclNode.args;
+    funcBody.scope:setParent(scope);
+    return Ast.FunctionLiteralExpression(funcArgs, funcBody);
+end
+
+-- Optimized generateCustomFunctionLiteral
 local function generateCustomFunctionLiteral(parentScope, variant)
-	local parser = Parser:new({
-		LuaVersion = LuaVersion.Lua52;
-	});
-
-	-- Custom Function Type 1
-	if variant == 1 then
-		local funcDeclNode = parser:parse(custom1Code).body.statements[1];
-		local funcBody = funcDeclNode.body;
-		local funcArgs = funcDeclNode.args;
-		funcBody.scope:setParent(parentScope);
-		return Ast.FunctionLiteralExpression(funcArgs, funcBody);
-		
-		-- Custom Function Type 2
-	else
-		local funcDeclNode = parser:parse(custom2Code).body.statements[1];
-		local funcBody = funcDeclNode.body;
-		local funcArgs = funcDeclNode.args;
-		funcBody.scope:setParent(parentScope);
-		return Ast.FunctionLiteralExpression(funcArgs, funcBody);
-	end
+    if not parsedCustomFunctions[variant] then
+        local code = variant == 1 and custom1Code or custom2Code
+        parsedCustomFunctions[variant] = parseAndCreateFuncDecl(parser, code, parentScope)
+    end
+    return parsedCustomFunctions[variant]
 end
 
+-- Optimized generateGlobalCustomFunctionDeclaration
 local function generateGlobalCustomFunctionDeclaration(ast, data)
-	local parser = Parser:new({
-		LuaVersion = LuaVersion.Lua52;
-	});
-	
-	-- Custom Function Type 1
-	if data.customFunctionVariant == 1 then
-		local astScope = ast.body.scope;
-		local funcDeclNode = parser:parse(custom1Code).body.statements[1];
-		local funcBody = funcDeclNode.body;
-		local funcArgs = funcDeclNode.args;
-		funcBody.scope:setParent(astScope);
-		return Ast.LocalVariableDeclaration(astScope, {data.customFuncId},
-		{Ast.FunctionLiteralExpression(funcArgs, funcBody)});
-	-- Custom Function Type 2
-	else
-		local astScope = ast.body.scope;
-		local funcDeclNode = parser:parse(custom2Code).body.statements[1];
-		local funcBody = funcDeclNode.body;
-		local funcArgs = funcDeclNode.args;
-		funcBody.scope:setParent(astScope);
-		return Ast.LocalVariableDeclaration(data.customFuncScope, {data.customFuncId},
-		{Ast.FunctionLiteralExpression(funcArgs, funcBody)});
-	end
+    local astScope = ast.body.scope;
+    local code = data.customFunctionVariant == 1 and custom1Code or custom2Code
+    local funcExpr = parseAndCreateFuncDecl(parser, code, astScope)
+    return Ast.LocalVariableDeclaration(data.customFuncScope, { data.customFuncId }, { funcExpr });
 end
 
 function SplitStrings:variant()
 	return math.random(1, customVariants);
 end
 
-function SplitStrings:apply(ast, pipeline)
-	local data = {};
-	
-	
-	if(self.ConcatenationType == "table") then
-		local scope = ast.body.scope;
-		local id = scope:addVariable();
-		data.tableConcatScope = scope;
-		data.tableConcatId = id;
-	elseif(self.ConcatenationType == "custom") then
-		data.customFunctionType = self.CustomFunctionType;
-		if data.customFunctionType == "global" then
-			local scope = ast.body.scope;
-			local id = scope:addVariable();
-			data.customFuncScope = scope;
-			data.customFuncId = id;
-			data.customFunctionVariant = self:variant();
-		end
-	end
-	
-	
-	local customLocalFunctionsCount = self.CustomLocalFunctionsCount;
-	local self2 = self;
-	
-	visitAst(ast, function(node, data) 
-		-- Previsit Function
-		
-		-- Create Local Function declarations
-		if(self.ConcatenationType == "custom" and data.customFunctionType == "local" and node.kind == Ast.AstKind.Block and node.isFunctionBlock) then
-			data.functionData.localFunctions = {};
-			for i = 1, customLocalFunctionsCount, 1 do
-				local scope = data.scope;
-				local id = scope:addVariable();
-				local variant = self:variant();
-				table.insert(data.functionData.localFunctions, {
-					scope = scope,
-					id = id,
-					variant = variant,
-					used = false,
-				});
-			end
-		end
-		
-	end, function(node, data)
-		-- PostVisit Function
-		
-		-- Create actual function literals for local customFunctionType
-		if(self.ConcatenationType == "custom" and data.customFunctionType == "local" and node.kind == Ast.AstKind.Block and node.isFunctionBlock) then
-			for i, func in ipairs(data.functionData.localFunctions) do
-				if func.used then
-					local literal = generateCustomFunctionLiteral(func.scope, func.variant);
-					table.insert(node.statements, 1, Ast.LocalVariableDeclaration(func.scope, {func.id}, {literal}));
-				end
-			end
-		end
-		
-		
-		-- Apply Only to String nodes
-		if(node.kind == Ast.AstKind.StringExpression) then
-			local str = node.value;
-			local chunks = {};
-			local i = 1;
-			
-			-- Split String into Parts of length between MinLength and MaxLength
-			while i <= string.len(str) do
-				local len = math.random(self.MinLength, self.MaxLength);
-				table.insert(chunks, string.sub(str, i, i + len - 1));
-				i = i + len;
-			end
-			
-			if(#chunks > 1) then
-				if math.random() < self.Treshold then
-					if self.ConcatenationType == "strcat" then
-						node = generateStrCatNode(chunks);
-					elseif self.ConcatenationType == "table" then
-						node = generateTableConcatNode(chunks, data);
-					elseif self.ConcatenationType == "custom" then
-						if self.CustomFunctionType == "global" then
-							local args = generateCustomNodeArgs(chunks, data, data.customFunctionVariant);
-							-- Add Reference for Variable Renaming
-							data.scope:addReferenceToHigherScope(data.customFuncScope, data.customFuncId);
-							node = Ast.FunctionCallExpression(Ast.VariableExpression(data.customFuncScope, data.customFuncId), args);
-						elseif self.CustomFunctionType == "local" then
-							local lfuncs = data.functionData.localFunctions;
-							local idx = math.random(1, #lfuncs);
-							local func = lfuncs[idx];
-							local args = generateCustomNodeArgs(chunks, data, func.variant);
-							func.used = true;
-							-- Add Reference for Variable Renaming
-							data.scope:addReferenceToHigherScope(func.scope, func.id);
-							node = Ast.FunctionCallExpression(Ast.VariableExpression(func.scope, func.id), args);
-						elseif self.CustomFunctionType == "inline" then
-							local variant = self:variant();
-							local args = generateCustomNodeArgs(chunks, data, variant);
-							local literal = generateCustomFunctionLiteral(data.scope, variant);
-							node = Ast.FunctionCallExpression(literal, args);
-						end
-					end
-				end
-			end
-			
-			return node, true;
-		end
-	end, data)
-	
-	
-	if(self.ConcatenationType == "table") then
-		local globalScope = data.globalScope;
-		local tableScope, tableId = globalScope:resolve("table")
-		ast.body.scope:addReferenceToHigherScope(globalScope, tableId);
-		table.insert(ast.body.statements, 1, Ast.LocalVariableDeclaration(data.tableConcatScope, {data.tableConcatId}, 
-		{Ast.IndexExpression(Ast.VariableExpression(tableScope, tableId), Ast.StringExpression("concat"))}));
-	elseif(self.ConcatenationType == "custom" and self.CustomFunctionType == "global") then
-		table.insert(ast.body.statements, 1, generateGlobalCustomFunctionDeclaration(ast, data));
-	end
+-- Optimized getVariableLength (seed random number generator once, possibly in an initialization phase)
+function SplitStrings:getVariableLength()
+    local sineWave = math.sin(os.time());
+    local randomFactor = math.random();
+    local length = math.floor((sineWave * randomFactor * (self.MaxLength - self.MinLength)) + self.MinLength);
+    return length;
 end
+
+function SplitStrings:shuffleChunks(chunks)
+	local shuffledChunks = {};
+	local indices = {};
+	for i = 1, #chunks do
+		indices[i] = i;
+	end
+	util.shuffle(indices);
+	for i, index in ipairs(indices) do
+		shuffledChunks[i] = chunks[index];
+	end
+	return shuffledChunks, indices;
+end
+
+function SplitStrings:storeOrder(indices)
+	local order = {};
+	for i, index in ipairs(indices) do
+		order[index] = i;
+	end
+	return order;
+end
+
+function SplitStrings:apply(ast, pipeline)
+    local data = {};
+    local concatenationType = self.ConcatenationType
+    local customFunctionType = self.CustomFunctionType
+    local nestedLayers = self.NestedLayers
+    local threshold = self.Treshold
+
+    if (concatenationType == "table") then
+        local scope = ast.body.scope;
+        local id = scope:addVariable();
+        data.tableConcatScope = scope;
+        data.tableConcatId = id;
+    elseif (concatenationType == "custom") then
+        data.customFunctionType = customFunctionType;
+        if customFunctionType == "global" then
+            local scope = ast.body.scope;
+            local id = scope:addVariable();
+            data.customFuncScope = scope;
+            data.customFuncId = id;
+            data.customFunctionVariant = self:variant();
+        end
+    end
+
+    local customLocalFunctionsCount = self.CustomLocalFunctionsCount;
+    local self2 = self;
+
+    visitAst(ast, function(node, data)
+        if (concatenationType == "custom" and customFunctionType == "local" and node.kind == Ast.AstKind.Block and node.isFunctionBlock) then
+            data.functionData.localFunctions = {};
+            for i = 1, customLocalFunctionsCount do
+                local scope = data.scope;
+                local id = scope:addVariable();
+                local variant = self:variant();
+                table.insert(data.functionData.localFunctions, {
+                    scope = scope,
+                    id = id,
+                    variant = variant,
+                    used = false,
+                });
+            end
+        end
+    end, function(node, data)
+        if (concatenationType == "custom" and customFunctionType == "local" and node.kind == Ast.AstKind.Block and node.isFunctionBlock) then
+            for _, func in ipairs(data.functionData.localFunctions) do
+                if func.used then
+                    local literal = generateCustomFunctionLiteral(func.scope, func.variant);
+                    table.insert(node.statements, 1, Ast.LocalVariableDeclaration(func.scope, { func.id }, { literal }));
+                end
+            end
+        end
+
+        if (node.kind == Ast.AstKind.StringExpression) then
+            local str = node.value;
+            local chunks = {};
+            local nestedChunks = chunks;
+            for _ = 1, nestedLayers do
+                local newChunks = {};
+                for _, chunk in ipairs(nestedChunks) do
+                    local i = 1;
+                    while i <= string.len(chunk) do
+                        local len = self:getVariableLength();
+                        table.insert(newChunks, string.sub(chunk, i, i + len - 1));
+                        i = i + len;
+                    end
+                end
+                nestedChunks = newChunks;
+            end
+
+            local shuffledChunks, indices = self:shuffleChunks(chunks);
+            local order = self:storeOrder(indices);
+
+            if (#shuffledChunks > 1 and math.random() < threshold) then
+                if concatenationType == "strcat" then
+                    node = generateStrCatNode(shuffledChunks);
+                elseif concatenationType == "table" then
+                    node = generateTableConcatNode(shuffledChunks, data);
+                elseif concatenationType == "custom" then
+                    if customFunctionType == "global" then
+                        local args = generateCustomNodeArgs(shuffledChunks, data, data.customFunctionVariant);
+                        data.scope:addReferenceToHigherScope(data.customFuncScope, data.customFuncId);
+                        node = Ast.FunctionCallExpression(Ast.VariableExpression(data.customFuncScope, data.customFuncId), args);
+                    elseif customFunctionType == "local" then
+                        local lfuncs = data.functionData.localFunctions;
+                        local idx = math.random(1, #lfuncs);
+                        local func = lfuncs[idx];
+                        local args = generateCustomNodeArgs(shuffledChunks, data, func.variant);
+                        func.used = true;
+                        data.scope:addReferenceToHigherScope(func.scope, func.id);
+                        node = Ast.FunctionCallExpression(Ast.VariableExpression(func.scope, func.id), args);
+                    elseif customFunctionType == "inline" then
+                        local variant = self:variant();
+                        local args = generateCustomNodeArgs(shuffledChunks, data, variant);
+                        local literal = generateCustomFunctionLiteral(data.scope, variant);
+                        node = Ast.FunctionCallExpression(literal, args);
+                    end
+                end
+            end
+
+            return node, true;
+        end
+    end, data)
+
+    if (concatenationType == "table") then
+        local globalScope = data.globalScope;
+        local tableScope, tableId = globalScope:resolve("table")
+        ast.body.scope:addReferenceToHigherScope(globalScope, tableId);
+        table.insert(ast.body.statements, 1, Ast.LocalVariableDeclaration(data.tableConcatScope, { data.tableConcatId },
+            { Ast.IndexExpression(Ast.VariableExpression(tableScope, tableId), Ast.StringExpression("concat")) }));
+    elseif (concatenationType == "custom" and customFunctionType == "global") then
+        table.insert(ast.body.statements, 1, generateGlobalCustomFunctionDeclaration(ast, data));
+    end
+
+    return ast;
+end
+
 
 return SplitStrings;

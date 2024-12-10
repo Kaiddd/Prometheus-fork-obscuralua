@@ -1,10 +1,10 @@
--- This Script is Part of the Prometheus Obfuscator by Levno_710
+-- This Script is Part of the Prometheus Obfuscator by levno-710
 --
 -- util.lua
 -- This file Provides a Utility function for visiting each node of an ast
 
-local Ast = require("prometheus.ast");
-local util = require("prometheus.util");
+local Ast = require("Prometheus.ast");
+local util = require("Prometheus.util");
 
 local AstKind = Ast.AstKind;
 local lookupify = util.lookupify;
@@ -184,6 +184,9 @@ local binaryExpressions = lookupify{
 	AstKind.DivExpression,
 	AstKind.ModExpression,
 	AstKind.PowExpression,
+	AstKind.ConcatExpression,
+	AstKind.Index
+
 }
 function visitExpression(expression, previsit, postvisit, data)
 	expression.isExpression = true;
