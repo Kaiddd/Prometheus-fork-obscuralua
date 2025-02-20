@@ -1,3 +1,5 @@
+# This project is legally protected by the fact that Prometheus is a GPL program. Any further attempts to take down this repository will result in counter legal action. 
+
 ### This project is a fork from Prometheus!
 # https://github.com/prometheus-lua/Prometheus/
 
